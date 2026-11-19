@@ -96,7 +96,9 @@ SQL+pandas项目分析/
 │   └── 02_seller_analysis.sql   # 专题分析：v_seller_base / v_seller_metrics 视图
 ├── reports/
 │   └── insights.md              # 商业分析报告（背景 / 方法 / 发现 / 建议）
-├── scripts/                     # 可复用的 Python 脚本（预留）
+├── scripts/
+│   ├── __init__.py              # 包声明，便于 Notebook 中 import
+│   └── data_cleaning.py         # 数据清洗入库脚本（可独立运行 / 可被 Notebook 调用）
 ├── requirements.txt             # 依赖清单
 ├── .gitignore                   # 忽略 data/、.venv/ 等
 └── README.md
@@ -111,7 +113,7 @@ SQL+pandas项目分析/
 | `data/olist.db` | **分析底座**。所有 SQL 都跑在这个库上，表与视图定义见下节 |
 | `sql/` | **SQL 资产**。所有业务逻辑以 `.sql` 文件沉淀，与 Notebook 解耦，便于评审与版本管理 |
 | `reports/` | **交付物**。面向业务方的分析报告，结论先行、数据支撑、含落地建议 |
-| `scripts/` | **脚本区**（预留）。后续可放定时 ETL、批量校验等可复用代码 |
+| `scripts/` | **代码资产**。数据清洗与入库逻辑全部封装在此，Notebook 只做调用，保证「脚本可独立运行、逻辑可被复用」 |
 
 ### 数据库对象
 
@@ -142,11 +144,14 @@ SQL+pandas项目分析/
 
 | 阶段 | 内容 | 关键产出 |
 | --- | --- | --- |
-| **一** | 订单表读取与清洗：5 个时间字段转 `datetime`、缺失值按业务口径处理 | `orders_cleaned` 入库 |
-| **二** | 配置驱动批量处理其余 5 张表：循环清洗、去重、入库 | `payments` / `order_items` / `reviews` / `products` / `category_translation` |
+| **一** | 调用 `scripts/data_cleaning.py` 的 `process_orders()`：5 个时间字段转 `datetime`、缺失值按业务口径处理 | `orders_cleaned` 入库 |
+| **二** | 调用 `process_secondary_tables()` 配置驱动批量处理其余 5 张表：循环清洗、去重、入库 | `payments` / `order_items` / `reviews` / `products` / `category_translation` |
 | **三** | 配置 JupySQL：`%load_ext sql` + 连接 `data/olist.db` | 可在 Notebook 内直接写 SQL |
 | **四** | 执行业务 SQL：月度 GMV 视图构建与查询 | `v_monthly_gmv` |
 | **五** | 专题分析：卖家履约质量与差评率关联，结果转 DataFrame | `v_seller_base` / `v_seller_metrics` |
+
+> 第一、二阶段的清洗代码不写在 Notebook 里，而是统一封装在 `scripts/data_cleaning.py`，
+> Notebook 中只保留 `from scripts.data_cleaning import ...` + 函数调用，便于复用与独立运行。
 
 ```mermaid
 flowchart LR
@@ -208,6 +213,13 @@ jupyter notebook main_analysis.ipynb
 ```
 
 或用 VS Code 打开 `main_analysis.ipynb`，选择 `.venv` 解释器后 **从上到下顺序执行全部单元格**（`Run All`）。
+
+Notebook 里的数据清洗单元格只是对脚本的调用，等价于直接执行：
+
+```bash
+# 独立跑完全部 6 张表的清洗与入库（含入库校验）
+python scripts/data_cleaning.py
+```
 
 执行完成后将自动生成：
 
@@ -281,7 +293,7 @@ df = result.DataFrame()   # 也可用 .dict() / .keys() / .scalar()
 
 - [ ] 接入 `products` / `category_translation`，补充**品类维度**的 GMV 与差评归因
 - [ ] 构建**客户 RFM 分层**视图，识别高价值客群与流失风险
-- [ ] 将 `scripts/` 落地为**参数化 ETL 脚本**，支持月度增量刷新
+- [ ] 将 `scripts/` 扩展为**参数化 ETL 脚本**，支持月度增量刷新
 - [ ] 增加**可视化看板**（趋势图、分层对比图），提升汇报表现力
 
 ---
